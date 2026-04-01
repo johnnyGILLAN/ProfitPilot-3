@@ -278,8 +278,9 @@ exports.getTransactionStats = async (req, res) => {
       dateQuery.$lte = new Date(endDate);
     }
     
-    // Base query with user
-    const query = { user: req.user.id };
+    // Base query with user - use ObjectId for aggregation
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const query = { user: userId };
     if (Object.keys(dateQuery).length > 0) {
       query.date = dateQuery;
     }
