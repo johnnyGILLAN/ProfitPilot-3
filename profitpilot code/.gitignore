@@ -1,0 +1,14 @@
+## Ignore environment and secret files
+*.env
+**/.env*
+backend/service-account.json
+frontend/.next
+frontend/.env.local
+frontend/.env.development
+frontend/.env.production
+
+# Node
+node_modules/
+
+# Logs
+npm-debug.log*
