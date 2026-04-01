@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 // @access  Private
 exports.createTransaction = async (req, res) => {
   try {
-    const { date, type, category, amount, description, tags, receiptImage, isRecurring, recurringDetails } = req.body;
+    const { date, type, category, amount, currency, description, tags, receiptImage, isRecurring, recurringDetails } = req.body;
 
     // Create transaction
     const transaction = await Transaction.create({
@@ -16,6 +16,7 @@ exports.createTransaction = async (req, res) => {
       type,
       category,
       amount,
+      currency: currency || 'USD',
       description,
       tags,
       receiptImage,
@@ -137,7 +138,7 @@ exports.getTransaction = async (req, res) => {
 // @access  Private
 exports.updateTransaction = async (req, res) => {
   try {
-    const { date, type, category, amount, description, tags, receiptImage, isRecurring, recurringDetails } = req.body;
+    const { date, type, category, amount, currency, description, tags, receiptImage, isRecurring, recurringDetails } = req.body;
     
     let transaction = await Transaction.findOne({
       _id: req.params.id,
@@ -159,6 +160,7 @@ exports.updateTransaction = async (req, res) => {
         type,
         category,
         amount,
+        currency: currency || transaction.currency || 'USD',
         description,
         tags,
         receiptImage,

@@ -25,6 +25,11 @@ const transactionSchema = new mongoose.Schema({
     required: [true, 'Please provide an amount'],
     min: [0, 'Amount cannot be negative']
   },
+  currency: {
+    type: String,
+    default: 'USD',
+    enum: ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'INR', 'AED', 'SGD', 'CHF', 'SEK', 'NOK', 'DKK', 'NZD', 'BRL', 'MXN', 'ZAR']
+  },
   description: {
     type: String,
     default: ''

@@ -29,12 +29,13 @@ exports.exportTransactions = async (req, res) => {
       Type: t.type,
       Category: t.category,
       Amount: t.amount.toFixed(2),
+      Currency: t.currency || 'USD',
       Description: t.description || '',
       Tags: (t.tags || []).join(', ')
     }));
     
     const parser = new Parser({
-      fields: ['Date', 'Type', 'Category', 'Amount', 'Description', 'Tags']
+      fields: ['Date', 'Type', 'Category', 'Amount', 'Currency', 'Description', 'Tags']
     });
     const csv = parser.parse(data);
     
