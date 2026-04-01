@@ -9,6 +9,7 @@ const {
   deleteInvoice,
   markAsPaid
 } = require('../controllers/invoiceController');
+const { generateInvoicePDF } = require('../controllers/pdfController');
 
 // All routes are protected
 router.use(protect);
@@ -23,5 +24,6 @@ router.route('/:id')
   .delete(deleteInvoice);
 
 router.put('/:id/paid', markAsPaid);
+router.get('/:id/pdf', generateInvoicePDF);
 
 module.exports = router;
