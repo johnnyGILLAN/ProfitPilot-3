@@ -37,6 +37,12 @@ User requested to unzip and deploy a financial tracker app (ProfitPilot) for sol
 - [x] Register page with form validation
 - [x] Auth context for state management
 - [x] API proxy from Python/FastAPI to Node.js backend
+- [x] **Stripe Payment Integration**
+  - Billing page with 3 subscription tiers (Starter $29, Professional $79, Enterprise $199)
+  - Secure checkout session creation
+  - Payment status tracking
+  - Payment success/cancel pages
+  - Transaction history stored in MongoDB
 
 ## Prioritized Backlog
 ### P0 (Critical)
@@ -60,11 +66,19 @@ User requested to unzip and deploy a financial tracker app (ProfitPilot) for sol
 - [ ] AI chat support
 
 ## API Endpoints
+### Auth
 - POST /api/auth/register - User registration
 - POST /api/auth/login - User login
 - GET /api/auth/me - Get current user (protected)
 - PUT /api/auth/profile - Update profile (protected)
 - PUT /api/auth/change-password - Change password (protected)
+
+### Payments (Stripe)
+- GET /api/payments/packages - List available subscription plans
+- POST /api/payments/checkout - Create Stripe checkout session
+- GET /api/payments/status/{session_id} - Get payment status
+- GET /api/payments/history - Get payment history
+- POST /api/webhook/stripe - Stripe webhook handler
 
 ## Next Tasks
 1. Implement transactions API and UI
