@@ -4,95 +4,70 @@
 ProfitPilot is a comprehensive financial management platform designed for solopreneurs, freelancers, coaches, and small business owners. It provides complete income/expense tracking, client management, invoice generation, tax estimation, and goal tracking.
 
 ## Tech Stack
-- **Frontend**: Next.js 15, React 18, TypeScript, Tailwind CSS, shadcn/ui, Radix UI
+- **Frontend**: Next.js 15, React 18, TypeScript, Tailwind CSS, shadcn/ui, Radix UI, Recharts
 - **Backend**: Node.js/Express.js (proxied via FastAPI), MongoDB (Mongoose ODM)
 - **Payments**: Stripe Checkout integration
+- **AI**: OpenAI GPT-4o via Emergent LLM Key (emergentintegrations)
 - **Authentication**: JWT-based auth with bcryptjs
 
-## Features (100% Implemented)
+## Architecture
+```
+/app/
+├── backend/
+│   ├── models/ (MongoDB models: User, Transaction, Invoice, etc.)
+│   ├── controllers/ (Express logic: auth, transactions, recurring, export, etc.)
+│   ├── routes/ (Express routes)
+│   ├── index.js (Express server on port 8002, subprocess)
+│   └── server.py (FastAPI on port 8001, proxies to Express, handles AI/Stripe natively)
+├── frontend/
+│   ├── src/app/ (Next.js 15 app router)
+│   │   ├── (app)/ (Dashboard, transactions, recurring, insights, export, etc.)
+│   │   └── (auth)/ (Login, Register)
+│   ├── src/components/ (React UI components)
+│   ├── src/config/site.ts (Navigation config)
+│   └── .env.local (NEXT_PUBLIC_API_BASE_URL)
+```
+
+## Features Implemented
 
 ### Core Financial Features
-- ✅ **Dashboard** - Real-time KPIs, recent transactions, pending invoices
-- ✅ **Transactions** - Full CRUD, categories, tags, filtering, search
-- ✅ **Invoices** - Create, track, mark paid, PDF generation/download
-- ✅ **Reports** - Revenue/expense breakdown, profit margins, monthly trends
-- ✅ **Categories** - Custom income/expense categories with color coding
+- Dashboard with KPI cards, interactive charts (bar, line, pie), recent transactions, pending invoices
+- Transactions - Full CRUD, categories, tags, filtering, search
+- Recurring Transactions - Create, manage, toggle, process recurring income/expenses
+- Invoices - Create, track, mark paid, PDF generation/download
+- Reports - Revenue/expense breakdown, profit margins, monthly trends
+- Categories - Custom income/expense categories with color coding
+
+### Business Intelligence
+- AI Financial Insights - GPT-4o powered analysis of spending patterns, income sources, recommendations
+- Dashboard Charts - Monthly income vs expenses (bar), profit trend (line), category breakdown (pie)
+- Data Export - CSV export for transactions, invoices, clients, and financial reports with filters
 
 ### Business Management
-- ✅ **Clients (CRM)** - Full client management with contacts, companies, notes
-- ✅ **Budgets** - Set spending limits, track progress, over-budget alerts
-- ✅ **Goal Tracker** - Financial goals with progress tracking
+- Clients (CRM) - Full client management with contacts, companies, notes
+- Budgets - Set spending limits, track progress, over-budget alerts
+- Goal Tracker - Financial goals with progress tracking
 
 ### Financial Planning
-- ✅ **Tax Calculator** - Self-employment tax estimation, quarterly payments
-- ✅ **Billing** - Stripe subscription plans (Starter/Pro/Enterprise)
+- Tax Calculator - Self-employment tax estimation, quarterly payments
+- Billing - Stripe subscription plans (Starter/Pro/Enterprise)
 
 ### Account Management
-- ✅ **Settings** - Profile, security, notifications, subscription
-- ✅ **Authentication** - Login, register, password change
+- Settings - Profile, security, notifications, subscription
+- Authentication - Login, register, password change
 
-## API Endpoints (27 Total)
+## API Endpoints (35+ Total)
 
-### Authentication (5)
-- POST /api/auth/register
-- POST /api/auth/login
-- GET /api/auth/me
-- PUT /api/auth/profile
-- PUT /api/auth/change-password
-
-### Transactions (6)
-- GET /api/transactions
-- POST /api/transactions
-- GET /api/transactions/:id
-- PUT /api/transactions/:id
-- DELETE /api/transactions/:id
-- GET /api/transactions/stats
-
-### Invoices (6)
-- GET /api/invoices
-- POST /api/invoices
-- GET /api/invoices/:id
-- PUT /api/invoices/:id
-- DELETE /api/invoices/:id
-- PUT /api/invoices/:id/paid
-- GET /api/invoices/:id/pdf
-
-### Clients (5)
-- GET /api/clients
-- POST /api/clients
-- GET /api/clients/:id
-- PUT /api/clients/:id
-- DELETE /api/clients/:id
-
-### Categories (4)
-- GET /api/categories
-- POST /api/categories
-- PUT /api/categories/:id
-- DELETE /api/categories/:id
-
-### Budgets (4)
-- GET /api/budgets
-- POST /api/budgets
-- PUT /api/budgets/:id
-- DELETE /api/budgets/:id
-
-### Payments (4)
-- GET /api/payments/packages
-- POST /api/payments/checkout
-- GET /api/payments/status/:session_id
-- POST /api/webhook/stripe
-
-## Demo Data
-Seeded with realistic data:
-- 24 transactions (3 months of activity)
-- 5 clients with contact details
-- 4 invoices (paid, pending, overdue)
-- 10 expense categories
-
-## Testing
-- Backend: 100% API coverage
-- Frontend: All pages render and function correctly
-- Auth flow: Fully tested
+### Auth (5): POST register, POST login, GET me, PUT profile, PUT change-password
+### Transactions (6): CRUD + stats
+### Recurring (5): CRUD + process + toggle
+### Invoices (7): CRUD + mark paid + PDF
+### Clients (5): CRUD
+### Categories (4): CRUD
+### Budgets (4): CRUD
+### Export (4): GET transactions, invoices, clients, report (all CSV)
+### Payments (4): packages, checkout, status, webhook
+### AI (2): POST insights, GET cached insights
 
 ## Credentials
 - **Demo**: demo@profitpilot.com / demo123
@@ -101,10 +76,26 @@ Seeded with realistic data:
 ## Live URL
 https://ai-insights-stage.preview.emergentagent.com
 
-## Future Enhancements (Backlog)
+## Completed Tasks
+- [x] Core CRUD (transactions, invoices, clients, budgets, categories)
+- [x] JWT Authentication
+- [x] Stripe Payment Integration
+- [x] Recurring Transactions (backend + frontend)
+- [x] AI Insights (backend + frontend)
+- [x] Data Export (backend + frontend with CSV download)
+- [x] Dashboard Charts (bar, line, pie charts with recharts)
+- [x] Navigation wiring (all new pages in sidebar)
+
+## Upcoming Tasks (P1)
+- [ ] Dark Mode - Theme toggle with TailwindCSS dark mode support
+- [ ] Multi-Currency Support - Currency selection per transaction with conversion display
+
+## Future Tasks (P2)
+- [ ] Admin Panel - User management, system overview for admin role
+- [ ] Onboarding Flow - First-time user walkthrough/tutorial
+- [ ] Email Notifications - Transaction alerts, invoice reminders
+
+## Backlog
 - Bank account integration (Plaid)
-- Email notifications
-- Multi-currency support
 - Mobile app
 - Team collaboration
-- AI-powered insights
