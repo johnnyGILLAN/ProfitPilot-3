@@ -11,18 +11,19 @@ ProfitPilot is a comprehensive financial management platform for solopreneurs, f
 ## All Features (Tested & Passing)
 - Dashboard (KPIs, charts), Transactions (CRUD + multi-currency + USD conversion)
 - Recurring Transactions, Invoices (CRUD + PDF), Clients (CRUD), Suppliers (CRUD)
-- Reports, Data Export (CSV), Tax Calculator (11 countries), Budgets, Goal Tracker
-- **AI Insights** — GPT-4o analysis with **AI Goal Creation** (insights → actionable SMART goals)
+- Reports, Data Export (CSV), Tax Calculator (11 countries), Categories
+- **AI Insights** — GPT-4o analysis → **AI Goal + Budget Creation** (single click creates both)
+- Goal Tracker (localStorage), Budget Tracker (MongoDB API)
 - Admin Panel, Onboarding Flow, Email Notifications (Resend), Dark Mode
 - Billing (Stripe), Settings (profile, security, notification toggles)
 
-## AI Goal Creation Flow
+## AI Insights → Goals + Budgets Flow
 1. User generates AI insights on /insights page
-2. "Turn Insights into Goals" card appears below insights
-3. User clicks "Create Goals from Insights"
-4. Backend POST /api/ai/generate-goals calls GPT-4o to create SMART goals
-5. Goals saved to localStorage and visible in /goal-tracker
-6. User can view, edit, track progress on AI-created goals
+2. "Turn Insights into Action" card appears
+3. User clicks "Create Goals & Budgets from Insights"
+4. Backend POST /api/ai/generate-goals calls GPT-4o → returns goals[] + budgets[]
+5. Goals saved to localStorage → visible in /goal-tracker
+6. Budgets created via POST /api/budgets → visible in /budgets
 
 ## Credentials
 - **Demo/Admin**: demo@profitpilot.com / demo123
