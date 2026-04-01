@@ -12,18 +12,19 @@ ProfitPilot is a comprehensive financial management platform for solopreneurs, f
 - Dashboard (KPIs, charts), Transactions (CRUD + multi-currency + USD conversion)
 - Recurring Transactions, Invoices (CRUD + PDF), Clients (CRUD), Suppliers (CRUD)
 - Reports, Data Export (CSV), Tax Calculator (11 countries), Categories
-- **AI Insights** — GPT-4o analysis → **AI Goal + Budget Creation** (single click creates both)
+- **AI Insights** → **AI Goal + Budget Creation** (single click creates both)
 - Goal Tracker (localStorage), Budget Tracker (MongoDB API)
 - Admin Panel, Onboarding Flow, Email Notifications (Resend), Dark Mode
 - Billing (Stripe), Settings (profile, security, notification toggles)
+- **Full Responsive Design** — All 14+ pages tested at mobile (375px), tablet (768px), and desktop (1920px)
 
-## AI Insights → Goals + Budgets Flow
-1. User generates AI insights on /insights page
-2. "Turn Insights into Action" card appears
-3. User clicks "Create Goals & Budgets from Insights"
-4. Backend POST /api/ai/generate-goals calls GPT-4o → returns goals[] + budgets[]
-5. Goals saved to localStorage → visible in /goal-tracker
-6. Budgets created via POST /api/budgets → visible in /budgets
+## Responsive Design Patterns
+- `flex-col sm:flex-row` for mobile wrapping on list items
+- `w-full sm:w-[180px]` for filter selects
+- `grid sm:grid-cols-2 lg:grid-cols-4` for stats cards
+- `flex-wrap` for button groups
+- `min-w-0 truncate` for text overflow handling
+- Sidebar collapses to hamburger menu on mobile
 
 ## Credentials
 - **Demo/Admin**: demo@profitpilot.com / demo123
