@@ -6,15 +6,14 @@ const Transaction = require('../models/Transaction');
 // @access  Private
 exports.createBudget = async (req, res) => {
   try {
-    const { name, amount, period, startDate, endDate, categories, notes } = req.body;
+    const { name, category, amount, period, startDate, endDate, categories, notes } = req.body;
 
-    // Create budget
     const budget = await Budget.create({
       user: req.user.id,
-      name,
+      name: name || category || 'Untitled Budget',
       amount,
-      period,
-      startDate,
+      period: period || 'monthly',
+      startDate: startDate || new Date(),
       endDate,
       categories,
       notes

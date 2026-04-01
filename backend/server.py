@@ -521,7 +521,7 @@ async def get_cached_insights(request: Request):
 
 @app.post("/api/ai/generate-goals")
 async def generate_goals_from_insights(request: Request):
-    """Use AI to generate actionable goals based on the user's financial insights"""
+    """Use AI to generate actionable goals AND budget suggestions based on the user's financial insights"""
     try:
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
@@ -554,8 +554,8 @@ Financial Summary:
 """
 
         if not EMERGENT_LLM_KEY:
-            # Fallback: generate basic goals without AI
             fallback_goals = []
+            fallback_budgets = []
             for i, insight in enumerate(insights[:3]):
                 fallback_goals.append({
                     "title": f"Goal: {insight.get('title', 'Improve finances')}",
@@ -565,35 +565,51 @@ Financial Summary:
                     "deadline": (datetime.now(timezone.utc) + timedelta(days=90 * (i + 1))).strftime("%Y-%m-%d"),
                     "category": "BUSINESS"
                 })
-            return {"success": True, "goals": fallback_goals}
+                fallback_budgets.append({
+                    "category": insight.get("title", "General"),
+                    "amount": round(summary.get("total_expense", 1000) * 0.3, 0),
+                    "period": "monthly",
+                    "reason": insight.get("content", "")
+                })
+            return {"success": True, "goals": fallback_goals, "budgets": fallback_budgets}
 
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"goals-{user_id}-{datetime.now().strftime('%Y%m%d%H%M')}",
-            system_message="""You are a financial goal-setting expert for ProfitPilot. Based on the AI insights and financial data provided, create specific, measurable, achievable goals.
+            system_message="""You are a financial goal-setting and budgeting expert for ProfitPilot. Based on the AI insights and financial data provided, create specific goals AND budget recommendations.
 
-Return a JSON array of goal objects with this exact structure:
-[
-    {
-        "title": "Short goal title (max 60 chars)",
-        "description": "Why this goal matters and how to achieve it (2-3 sentences)",
-        "targetAmount": 5000,
-        "currentAmount": 0,
-        "deadline": "2026-06-30",
-        "category": "SAVINGS" or "BUSINESS" or "PERSONAL" or "RETIREMENT" or "EDUCATION" or "OTHER"
-    }
-]
+Return a JSON object with two arrays:
+{
+    "goals": [
+        {
+            "title": "Short goal title (max 60 chars)",
+            "description": "Why this goal matters and how to achieve it (2-3 sentences)",
+            "targetAmount": 5000,
+            "currentAmount": 0,
+            "deadline": "2026-06-30",
+            "category": "SAVINGS" or "BUSINESS" or "PERSONAL" or "RETIREMENT" or "EDUCATION" or "OTHER"
+        }
+    ],
+    "budgets": [
+        {
+            "category": "Marketing" or "Software" or "Office Supplies" or "Travel" or "Meals" or "Professional Services" or "Equipment" or "Utilities" or "Rent" or "Other",
+            "amount": 500,
+            "period": "monthly",
+            "reason": "Brief explanation for this budget limit (1 sentence)"
+        }
+    ]
+}
 
 Rules:
-- Create 3-5 goals directly tied to the insights
-- Set realistic targetAmount values based on the financial data
-- Set deadlines 1-6 months from now (current date: """ + datetime.now().strftime("%Y-%m-%d") + """)
-- currentAmount should always be 0
-- Make goals SMART: Specific, Measurable, Achievable, Relevant, Time-bound
-- IMPORTANT: Return ONLY the JSON array, no additional text"""
+- Create 3-5 goals directly tied to the insights (SMART goals)
+- Create 3-5 budget suggestions for expense categories based on spending patterns
+- Set realistic amounts based on the financial data
+- Goal deadlines should be 1-6 months from now (current date: """ + datetime.now().strftime("%Y-%m-%d") + """)
+- Budget amounts should be reasonable limits based on current spending
+- IMPORTANT: Return ONLY the JSON object, no additional text"""
         ).with_model("openai", "gpt-4o")
 
-        user_message = UserMessage(text=f"Create actionable financial goals based on these insights:\n\n{summary_text}\n\nInsights:\n{insights_text}")
+        user_message = UserMessage(text=f"Create actionable financial goals AND budget suggestions based on these insights:\n\n{summary_text}\n\nInsights:\n{insights_text}")
 
         response = await chat.send_message(user_message)
 
@@ -603,7 +619,13 @@ Rules:
                 clean_response = clean_response.split("```")[1]
                 if clean_response.startswith("json"):
                     clean_response = clean_response[4:]
-            goals = json.loads(clean_response)
+            parsed = json.loads(clean_response)
+            if isinstance(parsed, list):
+                goals = parsed
+                budgets = []
+            else:
+                goals = parsed.get("goals", [])
+                budgets = parsed.get("budgets", [])
         except:
             goals = [{
                 "title": "Improve Financial Health",
@@ -613,8 +635,9 @@ Rules:
                 "deadline": (datetime.now(timezone.utc) + timedelta(days=90)).strftime("%Y-%m-%d"),
                 "category": "BUSINESS"
             }]
+            budgets = []
 
-        return {"success": True, "goals": goals}
+        return {"success": True, "goals": goals, "budgets": budgets}
 
     except HTTPException:
         raise
