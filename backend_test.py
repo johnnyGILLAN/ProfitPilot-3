@@ -170,6 +170,128 @@ class ProfitPilotAPITester:
         )
         return success
 
+    # ============== Payment API Tests ==============
+    
+    def test_get_payment_packages(self):
+        """Test GET /api/payments/packages"""
+        success, response = self.run_api_test(
+            "Get Payment Packages",
+            "GET",
+            "payments/packages",
+            200
+        )
+        
+        if success:
+            # Verify response structure
+            if 'packages' in response and isinstance(response['packages'], list):
+                packages = response['packages']
+                expected_packages = ['starter', 'professional', 'enterprise']
+                found_packages = [pkg['id'] for pkg in packages]
+                
+                if all(pkg_id in found_packages for pkg_id in expected_packages):
+                    self.log_test("Payment Packages Structure", True, f"Found packages: {found_packages}")
+                else:
+                    self.log_test("Payment Packages Structure", False, f"Missing packages. Expected: {expected_packages}, Found: {found_packages}")
+            else:
+                self.log_test("Payment Packages Structure", False, "Invalid response structure")
+        
+        return success
+
+    def test_create_checkout_session(self):
+        """Test POST /api/payments/checkout"""
+        checkout_data = {
+            "package_id": "starter",
+            "origin_url": "https://test.example.com",
+            "user_email": "test@test.com"
+        }
+        
+        success, response = self.run_api_test(
+            "Create Checkout Session",
+            "POST",
+            "payments/checkout",
+            200,
+            data=checkout_data
+        )
+        
+        if success:
+            # Verify response contains checkout_url and session_id
+            if 'checkout_url' in response and 'session_id' in response:
+                self.checkout_session_id = response['session_id']
+                self.log_test("Checkout Response Structure", True, f"Session ID: {self.checkout_session_id}")
+            else:
+                self.log_test("Checkout Response Structure", False, "Missing checkout_url or session_id")
+        
+        return success
+
+    def test_invalid_package_checkout(self):
+        """Test checkout with invalid package ID"""
+        invalid_checkout_data = {
+            "package_id": "invalid_package",
+            "origin_url": "https://test.example.com",
+            "user_email": "test@test.com"
+        }
+        
+        success, response = self.run_api_test(
+            "Invalid Package Checkout",
+            "POST",
+            "payments/checkout",
+            400,
+            data=invalid_checkout_data
+        )
+        return success
+
+    def test_get_payment_status(self):
+        """Test GET /api/payments/status/{session_id}"""
+        if not hasattr(self, 'checkout_session_id'):
+            self.log_test("Payment Status Check", False, "No session ID available from previous test")
+            return False
+        
+        success, response = self.run_api_test(
+            "Get Payment Status",
+            "GET",
+            f"payments/status/{self.checkout_session_id}",
+            200
+        )
+        
+        if success:
+            # Verify response structure
+            required_fields = ['session_id', 'status', 'payment_status', 'amount', 'currency']
+            if all(field in response for field in required_fields):
+                self.log_test("Payment Status Structure", True, f"Status: {response.get('payment_status')}")
+            else:
+                missing_fields = [field for field in required_fields if field not in response]
+                self.log_test("Payment Status Structure", False, f"Missing fields: {missing_fields}")
+        
+        return success
+
+    def test_invalid_session_status(self):
+        """Test payment status with invalid session ID"""
+        success, response = self.run_api_test(
+            "Invalid Session Status",
+            "GET",
+            "payments/status/invalid_session_id",
+            500  # Expecting error from Stripe
+        )
+        return success
+
+    def test_payment_history(self):
+        """Test GET /api/payments/history"""
+        success, response = self.run_api_test(
+            "Get Payment History",
+            "GET",
+            "payments/history?email=test@test.com",
+            200
+        )
+        
+        if success:
+            # Verify response structure
+            if 'transactions' in response and isinstance(response['transactions'], list):
+                self.log_test("Payment History Structure", True, f"Found {len(response['transactions'])} transactions")
+            else:
+                self.log_test("Payment History Structure", False, "Invalid response structure")
+        
+        return success
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting ProfitPilot API Tests")
@@ -192,6 +314,25 @@ class ProfitPilotAPITester:
         self.test_invalid_login()
         self.test_missing_fields_registration()
         self.test_duplicate_user_registration()
+        
+        # ============== Payment API Tests ==============
+        print("\n🔍 Testing Payment APIs...")
+        
+        # Test payment packages
+        self.test_get_payment_packages()
+        
+        # Test checkout session creation
+        self.test_create_checkout_session()
+        
+        # Test payment status (depends on checkout session)
+        self.test_get_payment_status()
+        
+        # Test error cases for payments
+        self.test_invalid_package_checkout()
+        self.test_invalid_session_status()
+        
+        # Test payment history
+        self.test_payment_history()
         
         return True
 
