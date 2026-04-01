@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class ProfitPilotAPITester:
-    def __init__(self, base_url="https://481a7a37-d9d1-43bb-af5b-d78606a965ce.preview.emergentagent.com"):
+    def __init__(self, base_url="https://ai-insights-stage.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.tests_run = 0

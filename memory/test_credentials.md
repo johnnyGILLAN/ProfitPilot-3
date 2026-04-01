@@ -17,16 +17,16 @@
 
 ```bash
 # Login
-curl -X POST "https://481a7a37-d9d1-43bb-af5b-d78606a965ce.preview.emergentagent.com/api/auth/login" \
+curl -X POST "https://ai-insights-stage.preview.emergentagent.com/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"email":"demo@profitpilot.com","password":"demo123"}'
 
 # Get transactions (with token)
-curl "https://481a7a37-d9d1-43bb-af5b-d78606a965ce.preview.emergentagent.com/api/transactions" \
+curl "https://ai-insights-stage.preview.emergentagent.com/api/transactions" \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Get financial stats
-curl "https://481a7a37-d9d1-43bb-af5b-d78606a965ce.preview.emergentagent.com/api/transactions/stats" \
+curl "https://ai-insights-stage.preview.emergentagent.com/api/transactions/stats" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 

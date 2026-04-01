@@ -99,7 +99,7 @@ Seeded with realistic data:
 - **Test**: test@test.com / password123
 
 ## Live URL
-https://481a7a37-d9d1-43bb-af5b-d78606a965ce.preview.emergentagent.com
+https://ai-insights-stage.preview.emergentagent.com
 
 ## Future Enhancements (Backlog)
 - Bank account integration (Plaid)
