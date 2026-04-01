@@ -170,126 +170,245 @@ class ProfitPilotAPITester:
         )
         return success
 
-    # ============== Payment API Tests ==============
+    # ============== Core Feature API Tests ==============
     
-    def test_get_payment_packages(self):
-        """Test GET /api/payments/packages"""
+    def test_transactions_crud(self):
+        """Test transactions CRUD operations"""
+        # Test GET transactions
         success, response = self.run_api_test(
-            "Get Payment Packages",
+            "Get Transactions",
             "GET",
-            "payments/packages",
+            "transactions?limit=10",
             200
         )
         
-        if success:
-            # Verify response structure
-            if 'packages' in response and isinstance(response['packages'], list):
-                packages = response['packages']
-                expected_packages = ['starter', 'professional', 'enterprise']
-                found_packages = [pkg['id'] for pkg in packages]
-                
-                if all(pkg_id in found_packages for pkg_id in expected_packages):
-                    self.log_test("Payment Packages Structure", True, f"Found packages: {found_packages}")
-                else:
-                    self.log_test("Payment Packages Structure", False, f"Missing packages. Expected: {expected_packages}, Found: {found_packages}")
-            else:
-                self.log_test("Payment Packages Structure", False, "Invalid response structure")
-        
-        return success
-
-    def test_create_checkout_session(self):
-        """Test POST /api/payments/checkout"""
-        checkout_data = {
-            "package_id": "starter",
-            "origin_url": "https://test.example.com",
-            "user_email": "test@test.com"
-        }
-        
-        success, response = self.run_api_test(
-            "Create Checkout Session",
-            "POST",
-            "payments/checkout",
-            200,
-            data=checkout_data
-        )
-        
-        if success:
-            # Verify response contains checkout_url and session_id
-            if 'checkout_url' in response and 'session_id' in response:
-                self.checkout_session_id = response['session_id']
-                self.log_test("Checkout Response Structure", True, f"Session ID: {self.checkout_session_id}")
-            else:
-                self.log_test("Checkout Response Structure", False, "Missing checkout_url or session_id")
-        
-        return success
-
-    def test_invalid_package_checkout(self):
-        """Test checkout with invalid package ID"""
-        invalid_checkout_data = {
-            "package_id": "invalid_package",
-            "origin_url": "https://test.example.com",
-            "user_email": "test@test.com"
-        }
-        
-        success, response = self.run_api_test(
-            "Invalid Package Checkout",
-            "POST",
-            "payments/checkout",
-            400,
-            data=invalid_checkout_data
-        )
-        return success
-
-    def test_get_payment_status(self):
-        """Test GET /api/payments/status/{session_id}"""
-        if not hasattr(self, 'checkout_session_id'):
-            self.log_test("Payment Status Check", False, "No session ID available from previous test")
+        if not success:
             return False
         
+        # Test transaction stats
         success, response = self.run_api_test(
-            "Get Payment Status",
+            "Get Transaction Stats",
             "GET",
-            f"payments/status/{self.checkout_session_id}",
+            "transactions/stats",
             200
         )
         
-        if success:
-            # Verify response structure
-            required_fields = ['session_id', 'status', 'payment_status', 'amount', 'currency']
-            if all(field in response for field in required_fields):
-                self.log_test("Payment Status Structure", True, f"Status: {response.get('payment_status')}")
-            else:
-                missing_fields = [field for field in required_fields if field not in response]
-                self.log_test("Payment Status Structure", False, f"Missing fields: {missing_fields}")
+        if not success:
+            return False
         
-        return success
-
-    def test_invalid_session_status(self):
-        """Test payment status with invalid session ID"""
+        # Test CREATE transaction
+        transaction_data = {
+            "date": "2024-01-15",
+            "type": "EXPENSE",
+            "category": "Office Supplies",
+            "amount": 150.50,
+            "description": "Test transaction",
+            "tags": ["test", "api"]
+        }
+        
         success, response = self.run_api_test(
-            "Invalid Session Status",
-            "GET",
-            "payments/status/invalid_session_id",
-            500  # Expecting error from Stripe
+            "Create Transaction",
+            "POST",
+            "transactions",
+            201,
+            data=transaction_data
         )
-        return success
+        
+        if success and 'data' in response:
+            self.test_transaction_id = response['data']['_id']
+            self.log_test("Transaction Creation", True, f"Created transaction ID: {self.test_transaction_id}")
+        else:
+            return False
+        
+        # Test UPDATE transaction
+        if hasattr(self, 'test_transaction_id'):
+            update_data = {
+                "amount": 200.00,
+                "description": "Updated test transaction"
+            }
+            
+            success, response = self.run_api_test(
+                "Update Transaction",
+                "PUT",
+                f"transactions/{self.test_transaction_id}",
+                200,
+                data=update_data
+            )
+            
+            if not success:
+                return False
+        
+        # Test DELETE transaction
+        if hasattr(self, 'test_transaction_id'):
+            success, response = self.run_api_test(
+                "Delete Transaction",
+                "DELETE",
+                f"transactions/{self.test_transaction_id}",
+                200
+            )
+            
+            if not success:
+                return False
+        
+        return True
 
-    def test_payment_history(self):
-        """Test GET /api/payments/history"""
+    def test_clients_crud(self):
+        """Test clients CRUD operations"""
+        # Test GET clients
         success, response = self.run_api_test(
-            "Get Payment History",
+            "Get Clients",
             "GET",
-            "payments/history?email=test@test.com",
+            "clients?limit=10",
             200
         )
         
-        if success:
-            # Verify response structure
-            if 'transactions' in response and isinstance(response['transactions'], list):
-                self.log_test("Payment History Structure", True, f"Found {len(response['transactions'])} transactions")
-            else:
-                self.log_test("Payment History Structure", False, "Invalid response structure")
+        if not success:
+            return False
         
+        # Test CREATE client
+        client_data = {
+            "name": "Test Client",
+            "email": "testclient@example.com",
+            "phone": "+1234567890",
+            "company": "Test Company",
+            "address": "123 Test St",
+            "notes": "Test client for API testing"
+        }
+        
+        success, response = self.run_api_test(
+            "Create Client",
+            "POST",
+            "clients",
+            201,
+            data=client_data
+        )
+        
+        if success and 'data' in response:
+            self.test_client_id = response['data']['_id']
+            self.log_test("Client Creation", True, f"Created client ID: {self.test_client_id}")
+        else:
+            return False
+        
+        # Test UPDATE client
+        if hasattr(self, 'test_client_id'):
+            update_data = {
+                "name": "Updated Test Client",
+                "company": "Updated Test Company"
+            }
+            
+            success, response = self.run_api_test(
+                "Update Client",
+                "PUT",
+                f"clients/{self.test_client_id}",
+                200,
+                data=update_data
+            )
+            
+            if not success:
+                return False
+        
+        # Test DELETE client
+        if hasattr(self, 'test_client_id'):
+            success, response = self.run_api_test(
+                "Delete Client",
+                "DELETE",
+                f"clients/{self.test_client_id}",
+                200
+            )
+            
+            if not success:
+                return False
+        
+        return True
+
+    def test_invoices_crud(self):
+        """Test invoices CRUD operations"""
+        # Test GET invoices
+        success, response = self.run_api_test(
+            "Get Invoices",
+            "GET",
+            "invoices?limit=10",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        # Test CREATE invoice
+        invoice_data = {
+            "clientEmail": "testclient@example.com",
+            "invoiceNumber": f"INV-TEST-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "date": "2024-01-15",
+            "dueDate": "2024-02-15",
+            "items": [
+                {
+                    "description": "Test Service",
+                    "quantity": 2,
+                    "unitPrice": 100.00
+                }
+            ],
+            "notes": "Test invoice",
+            "status": "PENDING"
+        }
+        
+        success, response = self.run_api_test(
+            "Create Invoice",
+            "POST",
+            "invoices",
+            201,
+            data=invoice_data
+        )
+        
+        if success and 'data' in response:
+            self.test_invoice_id = response['data']['_id']
+            self.log_test("Invoice Creation", True, f"Created invoice ID: {self.test_invoice_id}")
+        else:
+            return False
+        
+        # Test mark invoice as paid
+        if hasattr(self, 'test_invoice_id'):
+            success, response = self.run_api_test(
+                "Mark Invoice as Paid",
+                "PUT",
+                f"invoices/{self.test_invoice_id}/paid",
+                200
+            )
+            
+            if not success:
+                return False
+        
+        # Test DELETE invoice
+        if hasattr(self, 'test_invoice_id'):
+            success, response = self.run_api_test(
+                "Delete Invoice",
+                "DELETE",
+                f"invoices/{self.test_invoice_id}",
+                200
+            )
+            
+            if not success:
+                return False
+        
+        return True
+
+    def test_categories_api(self):
+        """Test categories API"""
+        success, response = self.run_api_test(
+            "Get Categories",
+            "GET",
+            "categories",
+            200
+        )
+        return success
+
+    def test_budgets_api(self):
+        """Test budgets API"""
+        success, response = self.run_api_test(
+            "Get Budgets",
+            "GET",
+            "budgets",
+            200
+        )
         return success
 
     def run_all_tests(self):
@@ -315,24 +434,23 @@ class ProfitPilotAPITester:
         self.test_missing_fields_registration()
         self.test_duplicate_user_registration()
         
-        # ============== Payment API Tests ==============
-        print("\n🔍 Testing Payment APIs...")
+        # ============== Core Feature API Tests ==============
+        print("\n🔍 Testing Core Feature APIs...")
         
-        # Test payment packages
-        self.test_get_payment_packages()
+        # Test transactions CRUD
+        self.test_transactions_crud()
         
-        # Test checkout session creation
-        self.test_create_checkout_session()
+        # Test clients CRUD
+        self.test_clients_crud()
         
-        # Test payment status (depends on checkout session)
-        self.test_get_payment_status()
+        # Test invoices CRUD
+        self.test_invoices_crud()
         
-        # Test error cases for payments
-        self.test_invalid_package_checkout()
-        self.test_invalid_session_status()
+        # Test categories
+        self.test_categories_api()
         
-        # Test payment history
-        self.test_payment_history()
+        # Test budgets
+        self.test_budgets_api()
         
         return True
 

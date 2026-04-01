@@ -13,6 +13,8 @@ const categoryRoutes = require('./routes/categories');
 const budgetRoutes = require('./routes/budgets');
 const importExportRoutes = require('./routes/importExport');
 const dataSourceRoutes = require('./routes/dataSources');
+const invoiceRoutes = require('./routes/invoices');
+const clientRoutes = require('./routes/clients');
 
 // Load env vars
 dotenv.config();
@@ -38,6 +40,8 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/data-sources', dataSourceRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/clients', clientRoutes);
 app.use('/api', importExportRoutes);
 
 app.get('/', (req, res) => {
