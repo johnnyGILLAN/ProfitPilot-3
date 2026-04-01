@@ -1,6 +1,0 @@
-import { redirect } from 'next/navigation';
-
-export default function RootPage() {
-  redirect('/dashboard');
-  return null; // redirect will prevent this from rendering
-}

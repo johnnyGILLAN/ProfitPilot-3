@@ -21,7 +21,7 @@ dotenv.config();
 connectDB();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8001;
 
 // Middleware
 app.use(cors()); // Enable CORS for all origins
