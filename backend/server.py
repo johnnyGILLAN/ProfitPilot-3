@@ -529,6 +529,273 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
+# ============== Exchange Rate Endpoints ==============
+
+exchange_rate_cache = {"rates": {}, "base": "USD", "updated_at": None}
+
+async def fetch_exchange_rates():
+    """Fetch and cache exchange rates from frankfurter.app (free, no key required)"""
+    global exchange_rate_cache
+    now = datetime.now(timezone.utc)
+    # Cache for 1 hour
+    if exchange_rate_cache["updated_at"] and (now - exchange_rate_cache["updated_at"]).total_seconds() < 3600:
+        return exchange_rate_cache["rates"]
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get("https://api.frankfurter.app/latest?from=USD")
+            if resp.status_code == 200:
+                data = resp.json()
+                rates = data.get("rates", {})
+                rates["USD"] = 1.0
+                exchange_rate_cache = {"rates": rates, "base": "USD", "updated_at": now}
+                return rates
+    except Exception as e:
+        print(f"Exchange rate fetch error: {e}")
+    # Return cached or default rates
+    if exchange_rate_cache["rates"]:
+        return exchange_rate_cache["rates"]
+    return {"USD": 1.0, "EUR": 0.92, "GBP": 0.79, "JPY": 149.5, "CAD": 1.36, "AUD": 1.53, "INR": 83.1, "AED": 3.67, "SGD": 1.34, "CHF": 0.88}
+
+@app.get("/api/exchange-rates")
+async def get_exchange_rates():
+    """Get current exchange rates (base: USD)"""
+    rates = await fetch_exchange_rates()
+    return {"success": True, "base": "USD", "rates": rates, "updated_at": exchange_rate_cache.get("updated_at", datetime.now(timezone.utc)).isoformat()}
+
+@app.get("/api/exchange-rates/convert")
+async def convert_currency(amount: float, from_currency: str = "USD", to_currency: str = "USD"):
+    """Convert amount between currencies"""
+    rates = await fetch_exchange_rates()
+    from_rate = rates.get(from_currency, 1.0)
+    to_rate = rates.get(to_currency, 1.0)
+    usd_amount = amount / from_rate
+    converted = usd_amount * to_rate
+    return {"success": True, "original": amount, "from": from_currency, "to": to_currency, "converted": round(converted, 2), "rate": round(to_rate / from_rate, 6)}
+
+# ============== Admin Endpoints ==============
+
+users_collection = db.users
+invoices_collection = db.invoices
+
+def get_user_from_token(request: Request):
+    """Extract user ID and role from JWT token"""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    import jwt
+    token = auth_header.replace("Bearer ", "")
+    try:
+        payload = jwt.decode(token, os.environ.get("JWT_SECRET", ""), algorithms=["HS256"])
+        return payload.get("id")
+    except:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.get("/api/admin/stats")
+async def admin_stats(request: Request):
+    """Get system-wide statistics (admin only)"""
+    user_id = get_user_from_token(request)
+    user = users_collection.find_one({"_id": ObjectId(user_id)})
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    total_users = users_collection.count_documents({})
+    total_transactions = transactions_collection.count_documents({})
+    total_invoices = invoices_collection.count_documents({})
+
+    income_agg = list(transactions_collection.aggregate([{"$match": {"type": "INCOME"}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    expense_agg = list(transactions_collection.aggregate([{"$match": {"type": "EXPENSE"}}, {"$group": {"_id": None, "total": {"$sum": "$amount"}}}]))
+    total_income = income_agg[0]["total"] if income_agg else 0
+    total_expenses = expense_agg[0]["total"] if expense_agg else 0
+
+    recent_users = list(users_collection.find({}, {"_id": 0, "password": 0}).sort("createdAt", -1).limit(5))
+
+    return {
+        "success": True,
+        "stats": {
+            "totalUsers": total_users,
+            "totalTransactions": total_transactions,
+            "totalInvoices": total_invoices,
+            "platformRevenue": total_income,
+            "platformExpenses": total_expenses,
+            "netProfit": total_income - total_expenses,
+        },
+        "recentUsers": recent_users,
+    }
+
+@app.get("/api/admin/users")
+async def admin_list_users(request: Request):
+    """List all users (admin only)"""
+    user_id = get_user_from_token(request)
+    user = users_collection.find_one({"_id": ObjectId(user_id)})
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    users = []
+    for u in users_collection.find({}, {"password": 0}):
+        user_txn_count = transactions_collection.count_documents({"user": u["_id"]})
+        users.append({
+            "id": str(u["_id"]),
+            "name": u.get("name", ""),
+            "email": u.get("email", ""),
+            "role": u.get("role", "user"),
+            "createdAt": u.get("createdAt", u.get("created_at", "")),
+            "transactionCount": user_txn_count,
+        })
+    return {"success": True, "users": users}
+
+@app.put("/api/admin/users/{target_user_id}/role")
+async def admin_update_role(request: Request, target_user_id: str):
+    """Update user role (admin only)"""
+    user_id = get_user_from_token(request)
+    user = users_collection.find_one({"_id": ObjectId(user_id)})
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    body = await request.json()
+    new_role = body.get("role", "user")
+    if new_role not in ("user", "admin"):
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    users_collection.update_one({"_id": ObjectId(target_user_id)}, {"$set": {"role": new_role}})
+    return {"success": True, "message": f"User role updated to {new_role}"}
+
+# ============== Email Notification Endpoints ==============
+
+import resend
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
+
+@app.get("/api/notifications/preferences")
+async def get_notification_prefs(request: Request):
+    """Get user notification preferences"""
+    user_id = get_user_from_token(request)
+    user = users_collection.find_one({"_id": ObjectId(user_id)}, {"_id": 0, "preferences": 1})
+    prefs = user.get("preferences", {}) if user else {}
+    return {
+        "success": True,
+        "preferences": {
+            "emailNotifications": prefs.get("emailNotifications", True),
+            "weeklyReports": prefs.get("weeklyReports", True),
+            "overdueReminders": prefs.get("overdueReminders", True),
+            "transactionAlerts": prefs.get("transactionAlerts", False),
+        }
+    }
+
+@app.put("/api/notifications/preferences")
+async def update_notification_prefs(request: Request):
+    """Update user notification preferences"""
+    user_id = get_user_from_token(request)
+    body = await request.json()
+    prefs = body.get("preferences", {})
+    users_collection.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {
+            "preferences.emailNotifications": prefs.get("emailNotifications", True),
+            "preferences.weeklyReports": prefs.get("weeklyReports", True),
+            "preferences.overdueReminders": prefs.get("overdueReminders", True),
+            "preferences.transactionAlerts": prefs.get("transactionAlerts", False),
+        }}
+    )
+    return {"success": True, "message": "Notification preferences updated"}
+
+@app.post("/api/notifications/send-test")
+async def send_test_email(request: Request):
+    """Send a test email to the current user"""
+    user_id = get_user_from_token(request)
+    user = users_collection.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not RESEND_API_KEY:
+        return {"success": False, "message": "Email service not configured. Set RESEND_API_KEY in .env"}
+
+    user_email = user.get("email", "")
+    user_name = user.get("name", "User")
+
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">ProfitPilot</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0;">Financial Intelligence Platform</p>
+        </div>
+        <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
+            <h2 style="color: #111827; margin-top: 0;">Hi {user_name}!</h2>
+            <p style="color: #4b5563; line-height: 1.6;">Email notifications are working correctly. You'll receive updates about:</p>
+            <ul style="color: #4b5563; line-height: 1.8;">
+                <li>Transaction alerts for new income & expenses</li>
+                <li>Weekly financial summary reports</li>
+                <li>Overdue invoice reminders</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">You can manage your notification preferences in Settings.</p>
+        </div>
+    </div>
+    """
+
+    try:
+        email_result = await asyncio.to_thread(resend.Emails.send, {
+            "from": SENDER_EMAIL,
+            "to": [user_email],
+            "subject": "ProfitPilot - Email Notifications Active",
+            "html": html,
+        })
+        return {"success": True, "message": f"Test email sent to {user_email}", "email_id": email_result.get("id") if isinstance(email_result, dict) else str(email_result)}
+    except Exception as e:
+        print(f"Email send error: {e}")
+        return {"success": False, "message": f"Failed to send email: {str(e)}"}
+
+@app.post("/api/notifications/invoice-reminder")
+async def send_invoice_reminder(request: Request):
+    """Send invoice overdue reminder email"""
+    user_id = get_user_from_token(request)
+    user = users_collection.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if user has notifications enabled
+    prefs = user.get("preferences", {})
+    if not prefs.get("overdueReminders", True):
+        return {"success": False, "message": "Overdue reminders are disabled in your preferences"}
+
+    if not RESEND_API_KEY:
+        return {"success": False, "message": "Email service not configured"}
+
+    body = await request.json()
+    client_name = body.get("clientName", "Client")
+    invoice_amount = body.get("amount", 0)
+    due_date = body.get("dueDate", "N/A")
+
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #dc2626; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">Overdue Invoice Reminder</h1>
+        </div>
+        <div style="background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+            <p style="color: #111827;">An invoice is overdue and requires attention:</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                <tr><td style="padding: 8px; color: #6b7280;">Client:</td><td style="padding: 8px; font-weight: bold;">{client_name}</td></tr>
+                <tr><td style="padding: 8px; color: #6b7280;">Amount:</td><td style="padding: 8px; font-weight: bold; color: #dc2626;">${invoice_amount:,.2f}</td></tr>
+                <tr><td style="padding: 8px; color: #6b7280;">Due Date:</td><td style="padding: 8px; font-weight: bold;">{due_date}</td></tr>
+            </table>
+            <p style="color: #6b7280; font-size: 14px;">Log into ProfitPilot to follow up on this invoice.</p>
+        </div>
+    </div>
+    """
+
+    try:
+        email_result = await asyncio.to_thread(resend.Emails.send, {
+            "from": SENDER_EMAIL,
+            "to": [user.get("email", "")],
+            "subject": f"ProfitPilot - Overdue Invoice: {client_name}",
+            "html": html,
+        })
+        return {"success": True, "message": "Reminder sent", "email_id": email_result.get("id") if isinstance(email_result, dict) else str(email_result)}
+    except Exception as e:
+        return {"success": False, "message": f"Failed to send: {str(e)}"}
+
 # ============== Proxy to Node.js Backend ==============
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
@@ -536,8 +803,8 @@ async def proxy_api(request: Request, path: str):
     """Proxy all other /api/* requests to Node.js backend"""
     global node_process
     
-    # Skip if it's a payment or AI endpoint (already handled above)
-    if path.startswith("payments/") or path.startswith("webhook/") or path.startswith("ai/"):
+    # Skip if it's a payment, AI, exchange, admin, or notification endpoint (already handled above)
+    if path.startswith("payments/") or path.startswith("webhook/") or path.startswith("ai/") or path.startswith("exchange-rates") or path.startswith("admin/") or path.startswith("notifications/"):
         raise HTTPException(status_code=404, detail="Not found")
     
     # Check if Node.js is running
