@@ -1,18 +1,20 @@
 """
-FastAPI server with Stripe integration and Node.js proxy for ProfitPilot.
+FastAPI server with Stripe integration, AI insights, and Node.js proxy for ProfitPilot.
 """
 import os
 import httpx
 import asyncio
 import subprocess
+import json
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from datetime import datetime, timezone
 from pymongo import MongoClient
+from bson import ObjectId
 
 # Load environment variables
 load_dotenv()
@@ -25,6 +27,9 @@ from emergentintegrations.payments.stripe.checkout import (
     CheckoutSessionRequest
 )
 
+# Import LLM integration for AI insights
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+
 # Node.js backend URL (runs on port 8002 internally)
 NODE_BACKEND_URL = "http://127.0.0.1:8002"
 
@@ -33,9 +38,12 @@ MONGO_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/profitpilot
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client.get_database()
 payment_transactions = db.payment_transactions
+transactions_collection = db.transactions
+ai_insights_collection = db.ai_insights
 
-# Stripe API key
+# API Keys
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "sk_test_emergent")
+EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 
 # Payment packages (server-side defined - never accept amounts from frontend)
 PAYMENT_PACKAGES = {
@@ -307,6 +315,210 @@ async def get_payment_history(email: Optional[str] = None):
     
     return {"success": True, "transactions": transactions}
 
+# ============== AI Insights Endpoints ==============
+
+class InsightRequest(BaseModel):
+    user_id: str
+
+@app.post("/api/ai/insights")
+async def generate_ai_insights(request: Request):
+    """Generate AI-powered financial insights based on user's transaction data"""
+    try:
+        # Get auth token from header
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        # Decode token to get user ID (simplified - in production use proper JWT verification)
+        import jwt
+        token = auth_header.replace("Bearer ", "")
+        try:
+            payload = jwt.decode(token, os.environ.get("JWT_SECRET", ""), algorithms=["HS256"])
+            user_id = payload.get("id")
+        except:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found")
+        
+        # Get user's financial data
+        user_object_id = ObjectId(user_id)
+        
+        # Aggregate transaction data
+        pipeline = [
+            {"$match": {"user": user_object_id}},
+            {"$group": {
+                "_id": "$type",
+                "total": {"$sum": "$amount"},
+                "count": {"$sum": 1}
+            }}
+        ]
+        
+        stats = list(transactions_collection.aggregate(pipeline))
+        total_income = next((s["total"] for s in stats if s["_id"] == "INCOME"), 0)
+        total_expense = next((s["total"] for s in stats if s["_id"] == "EXPENSE"), 0)
+        income_count = next((s["count"] for s in stats if s["_id"] == "INCOME"), 0)
+        expense_count = next((s["count"] for s in stats if s["_id"] == "EXPENSE"), 0)
+        
+        # Get expense by category
+        expense_pipeline = [
+            {"$match": {"user": user_object_id, "type": "EXPENSE"}},
+            {"$group": {"_id": "$category", "total": {"$sum": "$amount"}}},
+            {"$sort": {"total": -1}},
+            {"$limit": 5}
+        ]
+        top_expenses = list(transactions_collection.aggregate(expense_pipeline))
+        
+        # Get income by category
+        income_pipeline = [
+            {"$match": {"user": user_object_id, "type": "INCOME"}},
+            {"$group": {"_id": "$category", "total": {"$sum": "$amount"}}},
+            {"$sort": {"total": -1}},
+            {"$limit": 5}
+        ]
+        top_income = list(transactions_collection.aggregate(income_pipeline))
+        
+        # Prepare financial summary for AI
+        financial_summary = f"""
+        Financial Summary:
+        - Total Income: ${total_income:,.2f} ({income_count} transactions)
+        - Total Expenses: ${total_expense:,.2f} ({expense_count} transactions)
+        - Net Profit: ${total_income - total_expense:,.2f}
+        - Profit Margin: {((total_income - total_expense) / total_income * 100) if total_income > 0 else 0:.1f}%
+        
+        Top Income Sources:
+        {chr(10).join([f"- {i['_id']}: ${i['total']:,.2f}" for i in top_income]) or "No income recorded"}
+        
+        Top Expense Categories:
+        {chr(10).join([f"- {e['_id']}: ${e['total']:,.2f}" for e in top_expenses]) or "No expenses recorded"}
+        """
+        
+        # Generate AI insights
+        if not EMERGENT_LLM_KEY:
+            return {
+                "success": True,
+                "insights": [
+                    {
+                        "type": "summary",
+                        "title": "Financial Overview",
+                        "content": f"You have ${total_income:,.2f} in income and ${total_expense:,.2f} in expenses, resulting in a net profit of ${total_income - total_expense:,.2f}.",
+                        "priority": "info"
+                    }
+                ],
+                "generated_at": datetime.now(timezone.utc).isoformat()
+            }
+        
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"insights-{user_id}-{datetime.now().strftime('%Y%m%d')}",
+            system_message="""You are a professional financial advisor AI for ProfitPilot, a financial tracking app for solopreneurs and freelancers.
+            
+            Analyze the user's financial data and provide actionable insights. Be specific, practical, and encouraging.
+            
+            Return your response as a JSON array of insight objects with this structure:
+            [
+                {
+                    "type": "spending" | "saving" | "income" | "warning" | "opportunity",
+                    "title": "Short insight title",
+                    "content": "Detailed insight content (2-3 sentences)",
+                    "priority": "high" | "medium" | "low"
+                }
+            ]
+            
+            Provide 3-5 insights covering:
+            1. Overall financial health assessment
+            2. Spending patterns and potential savings
+            3. Income diversification opportunities
+            4. Tax planning suggestions
+            5. Actionable next steps
+            
+            IMPORTANT: Return ONLY the JSON array, no additional text."""
+        ).with_model("openai", "gpt-4o")
+        
+        user_message = UserMessage(text=f"Analyze this financial data and provide personalized insights:\n{financial_summary}")
+        
+        response = await chat.send_message(user_message)
+        
+        # Parse AI response
+        try:
+            # Clean response and parse JSON
+            clean_response = response.strip()
+            if clean_response.startswith("```"):
+                clean_response = clean_response.split("```")[1]
+                if clean_response.startswith("json"):
+                    clean_response = clean_response[4:]
+            insights = json.loads(clean_response)
+        except:
+            insights = [{
+                "type": "summary",
+                "title": "Financial Overview",
+                "content": response[:500] if len(response) > 500 else response,
+                "priority": "info"
+            }]
+        
+        # Store insights
+        ai_insights_collection.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "insights": insights,
+                    "financial_summary": {
+                        "total_income": total_income,
+                        "total_expense": total_expense,
+                        "net_profit": total_income - total_expense
+                    },
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            upsert=True
+        )
+        
+        return {
+            "success": True,
+            "insights": insights,
+            "summary": {
+                "total_income": total_income,
+                "total_expense": total_expense,
+                "net_profit": total_income - total_expense,
+                "profit_margin": ((total_income - total_expense) / total_income * 100) if total_income > 0 else 0
+            },
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating AI insights: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ai/insights/cached")
+async def get_cached_insights(request: Request):
+    """Get cached AI insights for the user"""
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        import jwt
+        token = auth_header.replace("Bearer ", "")
+        try:
+            payload = jwt.decode(token, os.environ.get("JWT_SECRET", ""), algorithms=["HS256"])
+            user_id = payload.get("id")
+        except:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        cached = ai_insights_collection.find_one({"user_id": user_id}, {"_id": 0})
+        
+        if cached:
+            return {"success": True, **cached}
+        else:
+            return {"success": True, "insights": [], "message": "No cached insights found"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== Root and Health Endpoints ==============
 
 @app.get("/")
@@ -324,8 +536,8 @@ async def proxy_api(request: Request, path: str):
     """Proxy all other /api/* requests to Node.js backend"""
     global node_process
     
-    # Skip if it's a payment endpoint (already handled above)
-    if path.startswith("payments/") or path.startswith("webhook/"):
+    # Skip if it's a payment or AI endpoint (already handled above)
+    if path.startswith("payments/") or path.startswith("webhook/") or path.startswith("ai/"):
         raise HTTPException(status_code=404, detail="Not found")
     
     # Check if Node.js is running

@@ -15,6 +15,8 @@ const importExportRoutes = require('./routes/importExport');
 const dataSourceRoutes = require('./routes/dataSources');
 const invoiceRoutes = require('./routes/invoices');
 const clientRoutes = require('./routes/clients');
+const exportRoutes = require('./routes/export');
+const recurringRoutes = require('./routes/recurring');
 
 // Load env vars
 dotenv.config();
@@ -42,6 +44,8 @@ app.use('/api/budgets', budgetRoutes);
 app.use('/api/data-sources', dataSourceRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/export', exportRoutes);
+app.use('/api/recurring', recurringRoutes);
 app.use('/api', importExportRoutes);
 
 app.get('/', (req, res) => {
