@@ -42,9 +42,10 @@ ProfitPilot is a comprehensive financial management platform for solopreneurs, f
 - ✅ Budgets - Budget tracking with progress bars
 - ✅ Goals - Goal setting with localStorage persistence
 - ✅ Reports - Multiple chart types (area, pie, bar)
+- ✅ **Import Data** - Upload CSV/Excel files with drag-drop, preview, and import
 - ✅ Export - CSV export for transactions, invoices, clients
 - ✅ Tax Calculator - 11 country tax rates
-- ✅ AI Insights - Generate AI-powered recommendations
+- ✅ **AI Insights** - Generate AI-powered recommendations, create and save goals/budgets
 - ✅ Settings - Profile, security, notification preferences
 - ✅ Admin Panel - User management (admin only)
 - ✅ Billing - Stripe integration for subscriptions
@@ -59,9 +60,24 @@ ProfitPilot is a comprehensive financial management platform for solopreneurs, f
 - ✅ Budgets: CRUD + progress
 - ✅ Categories: CRUD
 - ✅ Export: CSV generation
-- ✅ AI: Insights generation
+- ✅ **Import**: Upload CSV/Excel files (POST /api/import/sheet)
+- ✅ **AI**: Insights generation, goals/budgets generation, save budgets
 - ✅ Admin: Stats + user management
 - ✅ Payments: Stripe integration
+
+### New Features Added (This Session)
+1. **AI-Generated Goals & Budgets**
+   - POST /api/ai/insights - Analyze financial data
+   - POST /api/ai/generate-goals - Create personalized goals and budgets
+   - POST /api/ai/save-budgets - Save budgets to database
+   - Frontend buttons to generate and save goals/budgets
+
+2. **Data Import from Excel/CSV**
+   - New Import Data page with drag-drop file upload
+   - Support for CSV, XLSX, XLS files
+   - Preview data before importing
+   - Import transactions, clients, invoices
+   - Download template functionality
 
 ## Prioritized Backlog
 
