@@ -92,10 +92,10 @@ class ProfitPilotAPITester:
         return False
 
     def test_user_login(self):
-        """Test user login with existing test user"""
+        """Test user login with demo credentials"""
         login_data = {
-            "email": "test@test.com",
-            "password": "password123"
+            "email": "demo@profitpilot.com",
+            "password": "demo123"
         }
         
         success, response = self.run_api_test(
