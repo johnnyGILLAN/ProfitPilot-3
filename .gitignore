@@ -42,3 +42,7 @@
 # Environment files
 *.env
 *.env.*
+node_modules/
+__pycache__/
+.next/
+.env
