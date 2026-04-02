@@ -645,6 +645,62 @@ Rules:
         print(f"Error generating goals: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/ai/save-budgets")
+async def save_ai_budgets(request: Request):
+    """Save AI-generated budgets to the database"""
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        import jwt
+        token = auth_header.replace("Bearer ", "")
+        try:
+            payload = jwt.decode(token, os.environ.get("JWT_SECRET", ""), algorithms=["HS256"])
+            user_id = payload.get("id")
+        except:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        body = await request.json()
+        budgets = body.get("budgets", [])
+        
+        if not budgets:
+            return {"success": False, "message": "No budgets provided"}
+
+        # Get budgets collection
+        budgets_collection = db.budgets
+        
+        # Prepare budgets for insertion
+        budgets_to_insert = []
+        for budget in budgets:
+            budget_doc = {
+                "user": user_id,
+                "name": budget.get("category", "Unknown"),
+                "amount": budget.get("amount", 0),
+                "period": budget.get("period", "monthly"),
+                "startDate": datetime.now(timezone.utc),
+                "notes": budget.get("reason", ""),
+                "createdAt": datetime.now(timezone.utc),
+                "updatedAt": datetime.now(timezone.utc)
+            }
+            budgets_to_insert.append(budget_doc)
+
+        # Insert budgets
+        result = budgets_collection.insert_many(budgets_to_insert)
+        
+        return {
+            "success": True,
+            "count": len(result.inserted_ids),
+            "message": f"{len(result.inserted_ids)} budgets saved successfully",
+            "budgets": [{"id": str(id)} for id in result.inserted_ids]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error saving budgets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== Root and Health Endpoints ==============
 
 @app.get("/")

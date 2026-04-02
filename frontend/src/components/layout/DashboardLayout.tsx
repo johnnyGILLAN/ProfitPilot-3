@@ -18,6 +18,7 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   '/clients': { title: 'Clients', subtitle: 'Manage your client relationships' },
   '/suppliers': { title: 'Suppliers', subtitle: 'Track your suppliers and vendors' },
   '/reports': { title: 'Reports', subtitle: 'Analyze your financial performance' },
+  '/import': { title: 'Import Data', subtitle: 'Upload financial data from Excel or CSV' },
   '/export': { title: 'Export Data', subtitle: 'Download your data in various formats' },
   '/tax': { title: 'Tax Calculator', subtitle: 'Estimate your tax obligations' },
   '/insights': { title: 'AI Insights', subtitle: 'AI-powered financial recommendations' },

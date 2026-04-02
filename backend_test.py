@@ -411,6 +411,75 @@ class ProfitPilotAPITester:
         )
         return success
 
+    def test_ai_features(self):
+        """Test AI insights and goals generation"""
+        # Test AI insights generation
+        success, response = self.run_api_test(
+            "Generate AI Insights",
+            "POST",
+            "ai/insights",
+            200
+        )
+        
+        if success:
+            insights = response.get('insights', [])
+            summary = response.get('summary', {})
+            self.log_test("AI Insights Generation", True, f"Generated {len(insights)} insights")
+            print(f"   Summary: Income: ${summary.get('total_income', 0)}, Expenses: ${summary.get('total_expense', 0)}")
+            
+            # Test goals generation with the insights
+            if insights and summary:
+                success, goals_response = self.run_api_test(
+                    "Generate Goals & Budgets",
+                    "POST",
+                    "ai/generate-goals",
+                    200,
+                    data={"insights": insights, "summary": summary}
+                )
+                
+                if success:
+                    goals = goals_response.get('goals', [])
+                    budgets = goals_response.get('budgets', [])
+                    self.log_test("Goals & Budgets Generation", True, f"Generated {len(goals)} goals, {len(budgets)} budgets")
+                    
+                    # Test saving budgets
+                    if budgets:
+                        success, save_response = self.run_api_test(
+                            "Save AI Budgets",
+                            "POST",
+                            "ai/save-budgets",
+                            200,
+                            data={"budgets": budgets}
+                        )
+                        if success:
+                            count = save_response.get('count', 0)
+                            self.log_test("Save AI Budgets", True, f"Saved {count} budgets")
+                        else:
+                            self.log_test("Save AI Budgets", False, "Failed to save budgets")
+                    else:
+                        self.log_test("Save AI Budgets", False, "No budgets generated to save")
+                else:
+                    self.log_test("Goals & Budgets Generation", False, "Failed to generate goals")
+            else:
+                self.log_test("Goals & Budgets Generation", False, "No insights to generate goals from")
+        else:
+            self.log_test("AI Insights Generation", False, "Failed to generate insights")
+
+    def test_import_features(self):
+        """Test import-related endpoints"""
+        # Test template download
+        success, response = self.run_api_test(
+            "Download Import Template",
+            "GET",
+            "import/templates?module=transactions",
+            200
+        )
+        
+        if success:
+            self.log_test("Import Template Download", True, "Template downloaded successfully")
+        else:
+            self.log_test("Import Template Download", False, "Failed to download template")
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting ProfitPilot API Tests")
@@ -451,6 +520,14 @@ class ProfitPilotAPITester:
         
         # Test budgets
         self.test_budgets_api()
+        
+        # ============== NEW AI FEATURES TESTS ==============
+        print("\n🤖 Testing AI Features...")
+        self.test_ai_features()
+        
+        # ============== IMPORT FEATURES TESTS ==============
+        print("\n📁 Testing Import Features...")
+        self.test_import_features()
         
         return True
 

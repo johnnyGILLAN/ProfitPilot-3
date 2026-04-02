@@ -135,6 +135,31 @@ export const aiAPI = {
   getCachedInsights: () => api.get('/api/ai/insights/cached'),
   generateGoals: (data: { insights: any[]; summary: any }) =>
     api.post('/api/ai/generate-goals', data),
+  saveGoals: (goals: any[]) => api.post('/api/ai/save-goals', { goals }),
+  saveBudgets: (budgets: any[]) => api.post('/api/ai/save-budgets', { budgets }),
+};
+
+// Import
+export const importAPI = {
+  uploadFile: (file: File, module: string = 'transactions') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('module', module);
+    return api.post('/api/import/sheet', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  preview: (file: File, module: string = 'transactions') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('module', module);
+    formData.append('dryRun', 'true');
+    return api.post('/api/import/sheet', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getTemplate: (module: string = 'transactions') =>
+    api.get(`/api/import/templates?module=${module}`, { responseType: 'blob' }),
 };
 
 // Payments
