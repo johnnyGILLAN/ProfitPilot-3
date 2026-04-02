@@ -11,4 +11,4 @@
 - Role: user
 
 ## API Base URL
-https://ai-insights-stage.preview.emergentagent.com
+https://get-started-now-4.preview.emergentagent.com

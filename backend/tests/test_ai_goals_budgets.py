@@ -8,7 +8,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('NEXT_PUBLIC_API_BASE_URL', 'https://ai-insights-stage.preview.emergentagent.com')
+BASE_URL = os.environ.get('NEXT_PUBLIC_API_BASE_URL', 'https://get-started-now-4.preview.emergentagent.com')
 
 # Test credentials
 TEST_EMAIL = "demo@profitpilot.com"
