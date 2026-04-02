@@ -1,14 +1,16 @@
 # ProfitPilot Test Credentials
 
-## Demo Account (Admin)
-- Email: demo@profitpilot.com
-- Password: demo123
-- Role: admin
+## Demo User Account
+- **Email:** demo@profitpilot.com
+- **Password:** demo123
+- **Role:** user
 
-## Test Account (User)
-- Email: test@test.com
-- Password: password123
-- Role: user
+## Admin User Account
+- **Email:** admin@profitpilot.com
+- **Password:** admin123
+- **Role:** admin
 
-## API Base URL
-https://get-started-now-4.preview.emergentagent.com
+## Notes
+- Demo user has sample transactions, invoices, and clients seeded
+- Admin user has access to the Admin Panel
+- All users can access the full feature set based on their role
