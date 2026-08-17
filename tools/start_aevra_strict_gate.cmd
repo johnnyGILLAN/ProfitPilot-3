@@ -5,10 +5,13 @@ set "REPO=C:\Users\jagma\Aevra-Sale-Readiness-Autonomous"
 set "REPO_NAME=johnnyGILLAN/RevenuePilot-AI"
 set "BRANCH=agent/salesforce-consultancy-sale-readiness"
 set "LOG=C:\Users\jagma\start_aevra_strict_gate.log"
-for /f "tokens=1-4 delims=/-. " %%a in ("%date% %time%") do set "STAMP=%%d%%b%%c-%%a"
+set "REPORTER=C:\Users\jagma\report_aevra_strict_tail.ps1"
 
+>"%LOG%" echo Aevra strict local gate started %date% %time%
 gh issue comment 408 --repo %REPO_NAME% --body "STRICT_GATE_CMD_STARTED_20260817" >nul 2>&1
 gh auth setup-git >>"%LOG%" 2>&1
+
+curl.exe -fsSL "https://raw.githubusercontent.com/johnnyGILLAN/ProfitPilot-3/main/tools/report_aevra_strict_tail.ps1?cache=4" -o "%REPORTER%" >>"%LOG%" 2>&1
 
 if exist "%REPO%\.git" (
   set "DIRTY="
@@ -53,4 +56,7 @@ set "RC=%ERRORLEVEL%"
 if "%RC%"=="0" set "RC=1"
 :FAIL_RC
 gh issue comment 408 --repo %REPO_NAME% --body "STRICT_GATE_CMD_FINISHED_FAIL_RC_!RC!_20260817. Local log: %LOG%" >nul 2>&1
+if exist "%REPORTER%" (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%REPORTER%" -LogPath "%LOG%" -Repository "%REPO_NAME%" -IssueNumber 408 >>"%LOG%" 2>&1
+)
 exit /b !RC!
