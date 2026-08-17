@@ -1,0 +1,41 @@
+[
+  {
+    "trigger": "Calculator",
+    "command": "C:\\Windows\\System32\\calc.exe",
+    "offCommand": "",
+    "ground": "foreground",
+    "voice": "calculator",
+    "voiceReply": "",
+    "allowParams": "false"
+  },
+  {
+    "trigger": "Notepad",
+    "command": "C:\\Windows\\System32\\notepad.exe",
+    "offCommand": "",
+    "ground": "foreground",
+    "voice": "notepad",
+    "voiceReply": "",
+    "allowParams": "false"
+  },
+  {
+    "trigger": "Aevra Local Runner",
+    "command": "powershell.exe",
+    "offCommand": "",
+    "ground": "foreground",
+    "voice": "",
+    "voiceReply": "",
+    "allowParams": "true",
+    "quoteParams": "false",
+    "mcpToolDescription": "Run local development, Git, Python, Node/npm and Salesforce CLI commands for the Aevra AI RevenuePilot-AI project."
+  },
+  {
+    "trigger": "Aevra Autonomous Sale Readiness",
+    "command": "C:\\Users\\jagma\\run-aevra-sale-readiness-autonomous-20260817.cmd",
+    "offCommand": "",
+    "ground": "foreground",
+    "voice": "",
+    "voiceReply": "",
+    "allowParams": "false",
+    "mcpToolDescription": "Run the complete autonomous local Aevra AI sale-readiness, Salesforce validation, repair, deployment and evidence workflow without GitHub Actions."
+  }
+]
