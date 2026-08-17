@@ -4,7 +4,7 @@ param(
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
 $RepoFullName = 'johnnyGILLAN/RevenuePilot-AI'
@@ -26,7 +26,7 @@ function Write-Log([string]$Message) {
 function Post-Status([string]$Body) {
     try {
         if (Get-Command gh -ErrorAction SilentlyContinue) {
-            & gh issue comment $IssueNumber --repo $RepoFullName --body $Body 2>&1 | Add-Content -Path $BootstrapLog -Encoding UTF8
+            & gh issue comment $IssueNumber --repo $RepoFullName --body $Body 1>> $BootstrapLog 2>&1
         }
     }
     catch {
@@ -34,56 +34,69 @@ function Post-Status([string]$Body) {
     }
 }
 
-function Test-UsableClone([string]$Path) {
-    if (-not (Test-Path (Join-Path $Path '.git'))) { return $false }
+function Invoke-Native([string]$Label, [scriptblock]$Command) {
+    Write-Log $Label
+    $global:LASTEXITCODE = 0
     try {
-        $remote = (& git -C $Path remote get-url origin 2>$null | Out-String).Trim()
-        if ($remote -notmatch 'johnnyGILLAN/RevenuePilot-AI(?:\.git)?$') { return $false }
-        & git -C $Path fetch origin $Branch --prune 2>&1 | Add-Content -Path $BootstrapLog -Encoding UTF8
-        if ($LASTEXITCODE -ne 0) { return $false }
-        $dirty = (& git -C $Path status --porcelain=v1 | Out-String).Trim()
-        if ($dirty) { return $false }
-        $aheadBehind = (& git -C $Path rev-list --left-right --count "origin/$Branch...HEAD" 2>$null | Out-String).Trim()
-        if ($aheadBehind) {
-            $parts = $aheadBehind -split '\s+'
-            if ($parts.Count -ge 2 -and [int]$parts[1] -gt 0) { return $false }
-        }
-        return $true
+        & $Command 1>> $BootstrapLog 2>&1
     }
-    catch { return $false }
+    catch {
+        Add-Content -Path $BootstrapLog -Value $_.Exception.ToString() -Encoding UTF8
+    }
+    return (if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE })
 }
 
 try {
     Write-Log 'Starting autonomous Aevra sale-readiness run. No GitHub Actions will be used.'
-    Post-Status "### Autonomous local sale-readiness run started\n\n- Started: $(Get-Date -Format o)\n- Machine: $env:COMPUTERNAME\n- Branch: ``$Branch``\n- Method: local Git, Codex CLI and Salesforce CLI only\n- GitHub Actions: **not used**"
+    Post-Status "### Autonomous local sale-readiness run restarted\n\n- Started: $(Get-Date -Format o)\n- Machine: $env:COMPUTERNAME\n- Branch: ``$Branch``\n- Method: local Git, Codex CLI and Salesforce CLI only\n- GitHub Actions: **not used**"
+
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'Git is not installed or not on PATH.' }
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI is not installed or not on PATH.' }
+
+    [void](Invoke-Native 'Configuring GitHub CLI as the Git credential helper.' { gh auth setup-git })
 
     if (Test-Path $StableWorkPath) {
-        if (-not (Test-UsableClone $StableWorkPath)) {
-            $backup = "$StableWorkPath-preserved-$RunStamp"
-            Write-Log "Existing work directory is dirty, ahead, invalid or unavailable; preserving it at $backup."
-            Move-Item -Path $StableWorkPath -Destination $backup
+        if (-not (Test-Path (Join-Path $StableWorkPath '.git'))) {
+            Write-Log 'Removing the incomplete dedicated clone created by the previous bootstrap attempt.'
+            Remove-Item -Recurse -Force $StableWorkPath
+        }
+        else {
+            $dirty = (& git -C $StableWorkPath status --porcelain=v1 2>$null | Out-String).Trim()
+            if ($dirty) {
+                $backup = "$StableWorkPath-preserved-$RunStamp"
+                Write-Log "Preserving dirty dedicated work directory at $backup."
+                Move-Item -Path $StableWorkPath -Destination $backup
+            }
         }
     }
 
     if (-not (Test-Path (Join-Path $StableWorkPath '.git'))) {
-        Write-Log "Creating isolated clone at $StableWorkPath."
-        & git clone --branch $Branch --single-branch $RepoUrl $StableWorkPath 2>&1 | Add-Content -Path $BootstrapLog -Encoding UTF8
-        if ($LASTEXITCODE -ne 0) {
-            if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'Git clone failed and GitHub CLI is unavailable.' }
-            & gh repo clone $RepoFullName $StableWorkPath -- --branch $Branch --single-branch 2>&1 | Add-Content -Path $BootstrapLog -Encoding UTF8
-            if ($LASTEXITCODE -ne 0) { throw 'Unable to create isolated clone using Git or GitHub CLI.' }
+        $cloneExit = Invoke-Native "Cloning isolated sale-readiness branch into $StableWorkPath." {
+            gh repo clone $RepoFullName $StableWorkPath -- --branch $Branch --single-branch
+        }
+        if ($cloneExit -ne 0 -or -not (Test-Path (Join-Path $StableWorkPath '.git'))) {
+            throw "Unable to create the isolated clone. Exit code $cloneExit."
         }
     }
 
-    & git -C $StableWorkPath fetch origin $Branch --prune 2>&1 | Add-Content -Path $BootstrapLog -Encoding UTF8
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch the current sale-readiness branch.' }
-    & git -C $StableWorkPath switch $Branch 2>&1 | Add-Content -Path $BootstrapLog -Encoding UTF8
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to switch to the sale-readiness branch.' }
-    & git -C $StableWorkPath reset --hard "origin/$Branch" 2>&1 | Add-Content -Path $BootstrapLog -Encoding UTF8
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to align the isolated clone with the remote branch.' }
+    $fetchExit = Invoke-Native 'Fetching the latest sale-readiness branch.' {
+        git -C $StableWorkPath fetch origin $Branch --prune
+    }
+    if ($fetchExit -ne 0) { throw "Unable to fetch branch $Branch. Exit code $fetchExit." }
+
+    $switchExit = Invoke-Native 'Switching the isolated clone to the sale-readiness branch.' {
+        git -C $StableWorkPath switch $Branch
+    }
+    if ($switchExit -ne 0) { throw "Unable to switch to branch $Branch. Exit code $switchExit." }
+
+    $resetExit = Invoke-Native 'Aligning the isolated clone with the remote sale-readiness branch.' {
+        git -C $StableWorkPath reset --hard "origin/$Branch"
+    }
+    if ($resetExit -ne 0) { throw "Unable to align the isolated clone. Exit code $resetExit." }
 
     $startHead = (& git -C $StableWorkPath rev-parse HEAD | Out-String).Trim()
     Write-Log "Isolated candidate prepared at $startHead."
+    Post-Status "### Isolated sale candidate prepared\n\n- Exact starting SHA: ``$startHead``\n- Worktree: dedicated clean clone\n- Unrelated local repositories: untouched"
 
     $Orchestrator = Join-Path $StableWorkPath 'scripts\run-autonomous-sale-readiness.ps1'
     if (-not (Test-Path $Orchestrator)) { throw "Autonomous orchestrator not found at $Orchestrator" }
@@ -94,26 +107,29 @@ try {
         $global:LASTEXITCODE = 0
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Orchestrator -MaximumRepairPasses $MaximumRepairPasses 2>&1 |
             Tee-Object -FilePath $RunLog
-        $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
+        $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
     }
     finally {
         Pop-Location
     }
 
-    & git -C $StableWorkPath fetch origin $Branch --prune 2>&1 | Add-Content -Path $BootstrapLog -Encoding UTF8
+    [void](Invoke-Native 'Refreshing remote branch state after the autonomous run.' {
+        git -C $StableWorkPath fetch origin $Branch --prune
+    })
+
     $remoteHead = (& git -C $StableWorkPath rev-parse "origin/$Branch" | Out-String).Trim()
     $localHead = (& git -C $StableWorkPath rev-parse HEAD | Out-String).Trim()
     $dirtyAfter = (& git -C $StableWorkPath status --porcelain=v1 | Out-String).Trim()
 
     if ($exitCode -eq 0 -and -not $dirtyAfter -and $localHead -eq $remoteHead) {
         Write-Log "Autonomous engineering gate completed successfully at $remoteHead."
-        Post-Status "### Autonomous local engineering gate completed\n\n- Result: **PASS**\n- Exact sale-branch SHA: ``$remoteHead``\n- Working tree: clean\n- Remote branch: aligned\n- GitHub Actions: not used\n\nThe final committed release-candidate status and evidence in ``docs/sale-readiness/`` are now the source of truth. Main is not merged by this bootstrap; final visual/external blockers must be read from that status before release integration."
+        Post-Status "### Autonomous local engineering gate completed\n\n- Result: **PASS**\n- Exact sale-branch SHA: ``$remoteHead``\n- Working tree: clean\n- Remote branch: aligned\n- GitHub Actions: not used\n\nThe committed release-candidate status and sanitised evidence in ``docs/sale-readiness/`` are now the source of truth."
         exit 0
     }
 
     $detail = "Exit=$exitCode LocalHead=$localHead RemoteHead=$remoteHead Dirty=$([bool]$dirtyAfter)"
     Write-Log "Autonomous run ended with a blocking or incomplete result. $detail"
-    Post-Status "### Autonomous local engineering run needs attention\n\n- Result: **BLOCKED OR INCOMPLETE**\n- $detail\n- GitHub Actions: not used\n\nReview the latest committed ``docs/sale-readiness/FINAL_RELEASE_CANDIDATE_STATUS.md`` and sanitised evidence, plus local logs at ``$ExternalLogRoot``."
+    Post-Status "### Autonomous local engineering run needs attention\n\n- Result: **BLOCKED OR INCOMPLETE**\n- $detail\n- GitHub Actions: not used\n\nReview the latest committed sale-readiness evidence and local logs at ``$ExternalLogRoot``."
     exit 1
 }
 catch {
