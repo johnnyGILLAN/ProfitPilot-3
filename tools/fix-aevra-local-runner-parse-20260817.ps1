@@ -23,13 +23,15 @@ $replacements = [ordered]@{
     '$lines.Add("- Approved Salesforce Org: `$ApprovedOrgId`")' = '$lines.Add((''- Approved Salesforce Org: `{0}`'' -f $ApprovedOrgId))'
     'foreach ($entry in $script:ToolInventory.GetEnumerator()) { $lines.Add("- **$($entry.Key):** `$($entry.Value)`") }' = 'foreach ($entry in $script:ToolInventory.GetEnumerator()) { $lines.Add((''- **{0}:** `{1}`'' -f $entry.Key, $entry.Value)) }'
     '$lines.Add("- `$($repo.Path)` — branch `$($repo.Branch)`, HEAD `$($repo.Head)`, dirty entries `$($repo.DirtyEntries)`, remote `$($repo.Remote)`")' = '$lines.Add((''- `{0}` - branch `{1}`, HEAD `{2}`, dirty entries `{3}`, remote `{4}`'' -f $repo.Path, $repo.Branch, $repo.Head, $repo.DirtyEntries, $repo.Remote))'
-    "$detail = $detail.Substring(0,1200) + '…'" = "$detail = $detail.Substring(0,1200) + '...'"
 }
 
 foreach ($entry in $replacements.GetEnumerator()) {
     if (-not $text.Contains($entry.Key)) { throw "Expected parse-fix source fragment was not found: $($entry.Key)" }
     $text = $text.Replace($entry.Key, $entry.Value)
 }
+
+# Avoid mojibake in Windows PowerShell 5.1 evidence output.
+$text = $text.Replace(" + '…'", " + '...'")
 
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
 [System.IO.File]::WriteAllText($path, $text, $utf8Bom)
