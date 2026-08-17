@@ -6,7 +6,6 @@ import pathlib
 import re
 import shutil
 import subprocess
-import sys
 from typing import Sequence
 
 REPO_FULL_NAME = "johnnyGILLAN/RevenuePilot-AI"
@@ -19,6 +18,7 @@ STAMP = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
 RUN_DIR = LOG_ROOT / f"canonical-python-gate-{STAMP}"
 LOG = RUN_DIR / "bootstrap.log"
 RUN_DIR.mkdir(parents=True, exist_ok=True)
+STRICT_RUNNER = "scripts/aevra_sale_readiness_strict.py"
 
 
 def safe(text: str) -> str:
@@ -126,24 +126,26 @@ def prepare_clone() -> str:
     status = run(["git", "-C", str(REPO), "status", "--porcelain=v1"]).stdout.strip()
     if status:
         raise RuntimeError(f"Dedicated clone is not clean after alignment:\n{status}")
-    head = run(["git", "-C", str(REPO), "rev-parse", "HEAD"]).stdout.strip()
-    return head
+    return run(["git", "-C", str(REPO), "rev-parse", "HEAD"]).stdout.strip()
 
 
 def run_gate_stage(label: str, arguments: Sequence[str]) -> int:
     python = python_command()
-    command = python + ["scripts/aevra_sale_readiness.py", *arguments]
+    command = python + [STRICT_RUNNER, *arguments]
     post(
-        f"Aevra canonical local gate stage started: **{label}**\n"
+        f"Aevra strict local gate stage started: **{label}**\n"
         f"Machine: `{os.environ.get('COMPUTERNAME', 'unknown')}`\n"
         "GitHub Actions: **not used**"
     )
     result = run(command, cwd=REPO, check=False, timeout=14400)
     current_head = run(["git", "-C", str(REPO), "rev-parse", "HEAD"]).stdout.strip()
-    status = run(["git", "-C", str(REPO), "status", "--porcelain=v1"], check=False).stdout.strip()
+    status = run(
+        ["git", "-C", str(REPO), "status", "--porcelain=v1"],
+        check=False,
+    ).stdout.strip()
     tail = safe(result.stdout[-30000:])
     post(
-        f"Aevra canonical local gate stage finished: **{label}**\n"
+        f"Aevra strict local gate stage finished: **{label}**\n"
         f"Exit code: `{result.returncode}`\n"
         f"Current SHA: `{current_head}`\n"
         f"Working tree clean: `{not bool(status)}`\n"
@@ -156,21 +158,26 @@ def run_gate_stage(label: str, arguments: Sequence[str]) -> int:
 def main() -> int:
     LOG.write_text("", encoding="utf-8")
     post(
-        "Canonical Python-based Aevra sale-readiness continuation started.\n"
+        "Strict Python-based Aevra sale-readiness continuation started.\n"
         f"Started: `{dt.datetime.now().astimezone().isoformat()}`\n"
         f"Machine: `{os.environ.get('COMPUTERNAME', 'unknown')}`\n"
         "The work is local/free; GitHub Actions and paid cloud build capacity are not being used."
     )
 
     starting_head = prepare_clone()
-    runner = REPO / "scripts" / "aevra_sale_readiness.py"
-    if not runner.is_file():
-        raise RuntimeError(f"Canonical runner is missing at {runner}")
+    runner = REPO / STRICT_RUNNER
+    base_runner = REPO / "scripts" / "aevra_sale_readiness.py"
+    if not runner.is_file() or not base_runner.is_file():
+        raise RuntimeError(f"Strict or base sale-readiness runner is missing in {REPO}")
 
     python = python_command()
-    run(python + ["-m", "py_compile", str(runner)], cwd=REPO, timeout=600)
+    run(
+        python + ["-m", "py_compile", str(base_runner), str(runner)],
+        cwd=REPO,
+        timeout=600,
+    )
     post(
-        "Dedicated Aevra candidate aligned and the canonical runner compiled.\n"
+        "Dedicated Aevra candidate aligned and both Python gate modules compiled.\n"
         f"Starting SHA: `{starting_head}`\n"
         f"Branch: `{BRANCH}`\n"
         "Working tree: clean"
@@ -192,7 +199,12 @@ def main() -> int:
 
     analyzer_rc = run_gate_stage(
         "Salesforce Code Analyzer AppExchange/security scan",
-        ["--mode", "audit", "--run-code-analyzer", "--publish-evidence"],
+        [
+            "--mode",
+            "audit",
+            "--run-code-analyzer",
+            "--publish-evidence",
+        ],
     )
     return analyzer_rc
 
@@ -201,7 +213,7 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:  # noqa: BLE001
-        message = f"Canonical Aevra local gate bootstrap failed: {safe(repr(exc))}"
+        message = f"Strict Aevra local gate bootstrap failed: {safe(repr(exc))}"
         with LOG.open("a", encoding="utf-8") as handle:
             handle.write("\n" + message + "\n")
         try:
