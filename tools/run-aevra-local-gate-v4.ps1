@@ -12,6 +12,7 @@ $RepoPath = Join-Path $env:USERPROFILE 'Aevra-Sale-Readiness-Autonomous'
 $RunStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $LogRoot = Join-Path $env:LOCALAPPDATA "AevraSaleReadiness\direct-gate-$RunStamp"
 $LogPath = Join-Path $LogRoot 'local-gate.log'
+$GhAuthLog = Join-Path $LogRoot 'gh-auth-setup.log'
 New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
 
 function Sanitize([string]$Text) {
@@ -38,7 +39,7 @@ try {
         if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool is not available on PATH." }
     }
 
-    & gh auth setup-git *> (Join-Path $LogRoot 'gh-auth-setup.log')
+    & gh auth setup-git *> $GhAuthLog
 
     if (-not (Test-Path (Join-Path $RepoPath '.git'))) {
         if (Test-Path $RepoPath) {
