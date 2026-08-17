@@ -33,7 +33,8 @@ function Post([string]$Body) {
 }
 
 try {
-    Post "### Direct local sale-readiness gate resumed\n\n- Started: $(Get-Date -Format o)\n- Machine: $env:COMPUTERNAME\n- GitHub Actions: **not used**\n- Dedicated clone: ``$RepoPath``"
+    $startMessage = "Direct local sale-readiness gate resumed.`n`nStarted: $(Get-Date -Format o)`nMachine: $env:COMPUTERNAME`nGitHub Actions: not used`nDedicated clone: $RepoPath"
+    Post $startMessage
 
     foreach ($tool in @('git','gh','powershell.exe')) {
         if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool is not available on PATH." }
@@ -45,7 +46,7 @@ try {
         if (Test-Path $RepoPath) {
             $preserved = "$RepoPath-preserved-$RunStamp"
             Move-Item $RepoPath $preserved
-            Post "Preserved an incomplete prior dedicated directory at ``$preserved``."
+            Post "Preserved incomplete prior dedicated directory: $preserved"
         }
         & gh repo clone $RepoFullName $RepoPath -- --branch $Branch --single-branch *> $LogPath
         if ($LASTEXITCODE -ne 0) { throw "Dedicated clone failed with exit $LASTEXITCODE." }
@@ -55,7 +56,7 @@ try {
     if ($dirtyBefore) {
         $preserved = "$RepoPath-preserved-$RunStamp"
         Move-Item $RepoPath $preserved
-        Post "Preserved a dirty dedicated clone at ``$preserved`` and created a fresh clone."
+        Post "Preserved dirty dedicated clone at $preserved and created a fresh clone."
         & gh repo clone $RepoFullName $RepoPath -- --branch $Branch --single-branch *> $LogPath
         if ($LASTEXITCODE -ne 0) { throw "Fresh dedicated clone failed with exit $LASTEXITCODE." }
     }
@@ -68,7 +69,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Dedicated clone alignment failed with exit $LASTEXITCODE." }
 
     $startHead = (& git -C $RepoPath rev-parse HEAD | Out-String).Trim()
-    Post "### Exact candidate prepared for direct gate\n\n- Starting SHA: ``$startHead``\n- Branch: ``$Branch``\n- Working tree: clean\n- Other repositories: untouched"
+    Post "Exact candidate prepared for direct gate.`nStarting SHA: $startHead`nBranch: $Branch`nWorking tree: clean`nOther repositories: untouched"
 
     $Runner = Join-Path $RepoPath 'scripts\local-sale-readiness.ps1'
     if (-not (Test-Path $Runner)) { throw "Local gate runner missing: $Runner" }
@@ -93,13 +94,15 @@ try {
     if ($tail.Length -gt 50000) { $tail = $tail.Substring($tail.Length - 50000) }
 
     $resultWord = if ($gateExit -eq 0) { 'PASS' } else { 'FAIL OR INCOMPLETE' }
-    Post "### Direct local sale-readiness gate finished\n\n- Result: **$resultWord**\n- Exit code: ``$gateExit``\n- Starting SHA: ``$startHead``\n- Local SHA after run: ``$localHead``\n- Remote sale-branch SHA: ``$remoteHead``\n- Working tree dirty: **$([bool]$dirtyAfter)**\n- GitHub Actions: **not used**\n- Local log: ``$LogPath``\n\n<details><summary>Sanitised final log output</summary>\n\n```text\n$tail\n```\n</details>"
+    $finishMessage = "Direct local sale-readiness gate finished.`n`nResult: $resultWord`nExit code: $gateExit`nStarting SHA: $startHead`nLocal SHA after run: $localHead`nRemote sale-branch SHA: $remoteHead`nWorking tree dirty: $([bool]$dirtyAfter)`nGitHub Actions: not used`nLocal log: $LogPath`n`nSanitised final log output:`n$tail"
+    Post $finishMessage
 
     exit $gateExit
 }
 catch {
     $message = Sanitize $_.Exception.Message
     $tail = if (Test-Path $LogPath) { Sanitize ((Get-Content $LogPath -Tail 120 | Out-String).Trim()) } else { '(no local gate log created)' }
-    Post "### Direct local sale-readiness bootstrap blocked\n\n- Error: ``$message``\n- Machine: $env:COMPUTERNAME\n- GitHub Actions: **not used**\n- Local log root: ``$LogRoot``\n\n```text\n$tail\n```"
+    $errorMessage = "Direct local sale-readiness bootstrap blocked.`n`nError: $message`nMachine: $env:COMPUTERNAME`nGitHub Actions: not used`nLocal log root: $LogRoot`n`nLog tail:`n$tail"
+    Post $errorMessage
     exit 1
 }
