@@ -18,6 +18,11 @@ foreach ($required in @($localRunner,$releaseRunner)) {
     if (-not (Test-Path $required)) { throw ('Required runner not found: {0}' -f $required) }
 }
 
+function Normalise-Text([string]$value) {
+    if ($null -eq $value) { return '' }
+    return $value.Replace([string][char]0x2026, '...').Replace([string][char]0x2014, '-').Replace([string][char]0x2013, '-')
+}
+
 function Repair-LocalRunner([string]$path) {
     $lines = [System.IO.File]::ReadAllLines($path)
     $changes = 0
@@ -41,7 +46,7 @@ function Repair-LocalRunner([string]$path) {
         if ($trimmed -match '^\$lines\.Add\("- `\$\(\$repo\.Path\)') {
             $lines[$i] = '        $lines.Add((''- `{0}` - branch `{1}`, HEAD `{2}`, dirty entries `{3}`, remote `{4}`'' -f $repo.Path, $repo.Branch, $repo.Head, $repo.DirtyEntries, $repo.Remote))'; $changes++; continue
         }
-        $lines[$i] = $lines[$i].Replace([string][char]0x2026, '...').Replace('â€¦', '...').Replace('â€”', '-')
+        $lines[$i] = Normalise-Text $lines[$i]
     }
     if ($changes -lt 6) { throw ('Local runner repair expected 6 lines but changed {0}.' -f $changes) }
     $utf8Bom = New-Object System.Text.UTF8Encoding($true)
@@ -61,7 +66,7 @@ function Repair-ReleaseRunner([string]$path) {
             $indent = $lines[$i].Substring(0, $lines[$i].Length - $lines[$i].TrimStart().Length)
             $lines[$i] = $indent + '$markdown.Add(''```'')'; $changes++; continue
         }
-        $lines[$i] = $lines[$i].Replace([string][char]0x2026, '...').Replace('â€¦', '...').Replace('â€”', '-')
+        $lines[$i] = Normalise-Text $lines[$i]
     }
     if ($changes -ne 2) { throw ('Release runner repair expected 2 Markdown fence lines but changed {0}.' -f $changes) }
     $utf8Bom = New-Object System.Text.UTF8Encoding($true)
