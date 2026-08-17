@@ -190,13 +190,6 @@ def main() -> int:
     if audit_rc != 0:
         return audit_rc
 
-    deploy_rc = run_gate_stage(
-        "Salesforce validation, tests, Developer Org deployment and smoke checks",
-        ["--mode", "deploy", "--deploy", "--publish-evidence"],
-    )
-    if deploy_rc != 0:
-        return deploy_rc
-
     analyzer_rc = run_gate_stage(
         "Salesforce Code Analyzer AppExchange/security scan",
         [
@@ -206,7 +199,14 @@ def main() -> int:
             "--publish-evidence",
         ],
     )
-    return analyzer_rc
+    if analyzer_rc != 0:
+        return analyzer_rc
+
+    deploy_rc = run_gate_stage(
+        "Salesforce validation, tests, Developer Org deployment and smoke checks",
+        ["--mode", "deploy", "--deploy", "--publish-evidence"],
+    )
+    return deploy_rc
 
 
 if __name__ == "__main__":
