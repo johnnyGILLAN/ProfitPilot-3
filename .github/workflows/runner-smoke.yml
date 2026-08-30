@@ -1,0 +1,18 @@
+name: Runner smoke
+
+on:
+  push:
+    branches:
+      - analysis/bitvavo-15y-backtest-20260830
+    paths:
+      - .github/workflows/runner-smoke.yml
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm runner
+        run: |
+          python3 --version
+          echo runner-ok
